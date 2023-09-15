@@ -47,30 +47,37 @@ func extractPayloadBin(filename string) string {
 }
 
 func repackPayloadBin(filename, payload string) {
-	zipWriter, err := zip.OpenFile(filename, os.O_CREATE|os.O_WRONLY, 0644)
+	// Create a new zip archive
+	newZipFile, err := os.Create(filename)
 	if err != nil {
-		log.Fatalf("Failed to create a zip writer: %s\n", err)
+		log.Fatalf("Failed to create a new zip file: %v\n", err)
 	}
+	defer newZipFile.Close()
+
+	zipWriter := zip.NewWriter(newZipFile)
 	defer zipWriter.Close()
 
 	file, err := os.Open(payload)
 	if err != nil {
-		log.Fatalf("Failed to open payload file: %s\n", err)
+		log.Fatalf("Failed to open payload file: %v\n", err)
 	}
 	defer file.Close()
 
+	// Create a writer for payload.bin in the zip
 	payloadWriter, err := zipWriter.Create("payload.bin")
 	if err != nil {
-		log.Fatalf("Failed to create a writer for payload.bin in the zip: %s\n", err)
+		log.Fatalf("Failed to create a writer for payload.bin in the zip: %v\n", err)
 	}
 
+	// Copy payload content to the payload.bin writer in the zip
 	_, err = io.Copy(payloadWriter, file)
 	if err != nil {
-		log.Fatalf("Failed to write payload content into the zip: %s\n", err)
+		log.Fatalf("Failed to write payload content into the zip: %v\n", err)
 	}
 
 	fmt.Println("Repacked payload.bin successfully in the zip file.")
 }
+
 
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
