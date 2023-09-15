@@ -16,33 +16,60 @@ import (
 func extractPayloadBin(filename string) string {
 	zipReader, err := zip.OpenReader(filename)
 	if err != nil {
-		log.Fatalf("Not a valid zip archive: %s\n", filename)
+		log.Fatalf("Failed to open zip archive: %s\n", err)
 	}
 	defer zipReader.Close()
 
-	for _, file := range zipReader.Reader.File {
+	for _, file := range zipReader.File {
 		if file.Name == "payload.bin" && file.UncompressedSize64 > 0 {
 			zippedFile, err := file.Open()
 			if err != nil {
 				log.Fatalf("Failed to read zipped file: %s\n", file.Name)
 			}
 
-			tempfile, err := ioutil.TempFile(os.TempDir(), "payload_*.bin")
+			tempfile, err := ioutil.TempFile("", "payload_*.bin")
 			if err != nil {
-				log.Fatalf("Failed to create a temp file located at %s\n", tempfile.Name())
+				log.Fatalf("Failed to create a temp file: %s\n", err)
 			}
 			defer tempfile.Close()
 
 			_, err = io.Copy(tempfile, zippedFile)
 			if err != nil {
-				log.Fatal(err)
+				log.Fatalf("Failed to copy payload: %s\n", err)
 			}
 
 			return tempfile.Name()
 		}
 	}
 
+	log.Fatal("No payload.bin found in the archive")
 	return ""
+}
+
+func repackPayloadBin(filename, payload string) {
+	zipWriter, err := zip.OpenFile(filename, os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Fatalf("Failed to create a zip writer: %s\n", err)
+	}
+	defer zipWriter.Close()
+
+	file, err := os.Open(payload)
+	if err != nil {
+		log.Fatalf("Failed to open payload file: %s\n", err)
+	}
+	defer file.Close()
+
+	payloadWriter, err := zipWriter.Create("payload.bin")
+	if err != nil {
+		log.Fatalf("Failed to create a writer for payload.bin in the zip: %s\n", err)
+	}
+
+	_, err = io.Copy(payloadWriter, file)
+	if err != nil {
+		log.Fatalf("Failed to write payload content into the zip: %s\n", err)
+	}
+
+	fmt.Println("Repacked payload.bin successfully in the zip file.")
 }
 
 func main() {
@@ -75,16 +102,26 @@ func main() {
 	}
 
 	payloadBin := filename
+
 	if strings.HasSuffix(filename, ".zip") {
 		fmt.Println("Please wait while extracting payload.bin from the archive.")
 		payloadBin = extractPayloadBin(filename)
+		defer os.Remove(payloadBin)
+
 		if payloadBin == "" {
 			log.Fatal("Failed to extract payload.bin from the archive.")
-		} else {
-			defer os.Remove(payloadBin)
 		}
+
+		// Depending on the logic of your program, add operations
+		// on the payload.bin here, before repacking it
+		repackPayloadBin(filename, payloadBin)
+
+		fmt.Printf("Repacked payload.bin and saved it back into: %s\n", filename)
+		fmt.Printf("payload.bin: %s\n", payloadBin)
 	}
-	fmt.Printf("payload.bin: %s\n", payloadBin)
+
+	// Rest of your code handling the payload
+	// ...
 
 	payload := NewPayload(payloadBin)
 	if err := payload.Open(); err != nil {
